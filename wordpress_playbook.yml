@@ -1,0 +1,96 @@
+- hosts: 'webservers'
+  remote_user: 'gayane'
+  vars:
+      ansible_python_interpreter: python3
+  tasks:
+    - name: 'Install required packages'
+      apt:
+        name:
+          - 'nginx'
+          - 'mysql-server'
+          - 'php-fpm'
+          - 'php-mysql'
+        state: 'present'
+        update_cache: true
+      become: true
+    - name: 'Install python requirements for mySQL'
+      pip:
+        name: 'PyMySQL'
+        state: 'present'
+    - name: 'Start mysql'
+      service: 
+        name: 'mysql'
+        enabled: true
+        state: 'started'
+      become: true
+    - name: 'Create wordpress database'
+      mysql_db:
+        name: 'wpdb'
+        login_unix_socket: '/var/run/mysqld/mysqld.sock'
+        state: 'present'
+      become: true
+    - name: 'Add mysql-user'
+      mysql_user:
+        name: 'wpuser'
+        password: 'wppassword'
+        priv: '*.*:ALL'
+        login_unix_socket: '/var/run/mysqld/mysqld.sock'
+        state: 'present'
+      become: true
+    - name: 'Download wordpress'
+      get_url:
+          url: 'https://wordpress.org/latest.tar.gz'
+          dest: '/var/www/latest.tar.gz'
+      become: true
+    - name: 'Create www directory'
+      file:
+        state: 'directory'
+        path: '/var/www'
+        owner: 'root'
+        group: 'root'
+        mode: '0755'
+      become: true
+    - name: 'Untar wordpress tar file'
+      unarchive:
+        src: '/var/www/latest.tar.gz'
+        dest: '/var/www'
+        remote_src: true
+      become: true
+    - name: 'Delete wordpress tar'
+      file:
+        path: '/var/www/latest.tar.gz'
+        state: 'absent'
+      become: true
+    - name: 'Change file ownership'
+      file:
+        path: '/var/www/wordpress'
+        owner: 'www-data'
+        group: 'www-data'
+      become: true
+    - name: 'Copy mySQL config file'
+      copy:
+        src: 'wp-config.php'
+        dest: '/var/www/wordpresswp-config.php'
+      become: true
+    - name: 'Copy nginx config file'
+      copy:
+        src: 'wordpress'
+        dest: '/etc/nginx/sites-available/wordpress'
+      become: true
+    - name: 'Create symlink for wordpress'
+      file:
+        force: true
+        src: '/etc/nginx/sites-available/wordpress'
+        dest: '/etc/nginx/sites-enabled/wordpress'
+        state: 'link'
+      become: true
+    - name: 'Remove default nginx config'
+      file:
+        path: '/etc/nginx/sites-enabled/default'
+        state: 'absent'
+      become: true
+    - name: 'Restart nginx'
+      service: 
+        name: 'nginx'
+        state: 'restarted'
+      become: true
